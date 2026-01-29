@@ -17,28 +17,28 @@
         </header>
 
         <main class="grid">
-            <section class="card">
-                <h2>CPU Usage</h2>
+            <section class="card col-6">
+                <h2>CPU</h2>
                 <div class="gauge-container">
-                    <div id="cpu-gauge" class="gauge">0%</div>
+                    <div id="cpu-gauge" class="gauge">0</div>
                 </div>
             </section>
 
-            <section class="card">
-                <h2>Memory Usage</h2>
+            <section class="card col-6">
+                <h2>Memory</h2>
                 <div class="gauge-container">
-                    <div id="mem-gauge" class="gauge">0%</div>
+                    <div id="mem-gauge" class="gauge">0</div>
                 </div>
             </section>
 
-            <section class="card full-width">
-                <h2>System Info</h2>
+            <section class="card col-12">
+                <h2>Environment</h2>
                 <div id="sys-info" class="mono-text">Loading system metrics...</div>
             </section>
 
-            <section class="card full-width">
+            <section class="card col-12">
                 <div class="card-header">
-                    <h2>Recent Logs</h2>
+                    <h2>Live Activity</h2>
                     <div class="controls">
                         <span class="badge filter">All</span>
                         <span class="badge filter info">Info</span>
@@ -46,16 +46,16 @@
                     </div>
                 </div>
                 <div id="log-viewer" class="log-container mono-text">
-                    <div class="log-entry">Waiting for log stream...</div>
+                    <div class="log-entry">Waiting for stream...</div>
                 </div>
             </section>
 
-            <section class="card full-width">
-                <h2>Activity History</h2>
+            <section class="card col-12">
+                <h2>Timeline</h2>
                 <div id="activity-history" class="activity-list">
                     <div class="activity-item">
                         <span class="time">--:--</span>
-                        <span class="event">Initializing activity tracker...</span>
+                        <span class="event">Initializing tracker...</span>
                     </div>
                 </div>
             </section>

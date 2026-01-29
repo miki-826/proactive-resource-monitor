@@ -5,8 +5,8 @@ async function updateMetrics() {
         const cpu = Math.floor(Math.random() * 20 + 5);
         const mem = Math.floor(Math.random() * 10 + 65);
         
-        document.getElementById('cpu-gauge').innerText = `${cpu}%`;
-        document.getElementById('mem-gauge').innerText = `${mem}%`;
+        document.getElementById('cpu-gauge').innerText = `${cpu}`;
+        document.getElementById('mem-gauge').innerText = `${mem}`;
         
         const badge = document.getElementById('status-badge');
         badge.innerText = 'Online';
