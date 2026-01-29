@@ -35,6 +35,30 @@
                 <h2>System Info</h2>
                 <div id="sys-info" class="mono-text">Loading system metrics...</div>
             </section>
+
+            <section class="card full-width">
+                <div class="card-header">
+                    <h2>Recent Logs</h2>
+                    <div class="controls">
+                        <span class="badge filter">All</span>
+                        <span class="badge filter info">Info</span>
+                        <span class="badge filter error">Error</span>
+                    </div>
+                </div>
+                <div id="log-viewer" class="log-container mono-text">
+                    <div class="log-entry">Waiting for log stream...</div>
+                </div>
+            </section>
+
+            <section class="card full-width">
+                <h2>Activity History</h2>
+                <div id="activity-history" class="activity-list">
+                    <div class="activity-item">
+                        <span class="time">--:--</span>
+                        <span class="event">Initializing activity tracker...</span>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer>

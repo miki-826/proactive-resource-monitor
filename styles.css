@@ -77,14 +77,88 @@ h2 {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* System Info & Logs */
 .mono-text {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.875rem;
     white-space: pre-wrap;
     background: #000;
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: 8px;
-    line-height: 1.5;
+    line-height: 1.6;
+    border: 1px solid #1e293b;
+}
+
+/* Card Header with Controls */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.filter {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.6rem;
+    cursor: pointer;
+    background: #0f172a;
+    border-radius: 4px;
+}
+
+.filter:hover { background: #334155; }
+.filter.info { color: #3b82f6; }
+.filter.error { color: #ef4444; }
+
+/* Log Viewer */
+.log-container {
+    height: 300px;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.log-entry {
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid #0f172a;
+    padding-bottom: 0.2rem;
+    font-size: 0.8rem;
+}
+
+.log-time { color: #64748b; margin-right: 0.8rem; }
+.log-level-info { color: #3b82f6; font-weight: bold; margin-right: 0.5rem; }
+.log-level-error { color: #ef4444; font-weight: bold; margin-right: 0.5rem; }
+.log-msg { color: #e2e8f0; }
+
+/* Activity History */
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.8rem;
+    background: #1e293b;
+    border-radius: 6px;
+    border-left: 4px solid var(--accent);
+}
+
+.activity-item .time {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    min-width: 60px;
+}
+
+.activity-item .event {
+    color: #f1f5f9;
+    font-weight: 500;
 }
 
 footer {
