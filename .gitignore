@@ -1,0 +1,7 @@
+# Generated data
+cron_status.json
+.cpu_state.json
+
+# OS / editor
+.DS_Store
+*.swp

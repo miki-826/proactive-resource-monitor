@@ -1,70 +1,120 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proactive Resource Monitor</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proactive Resource Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>System Monitor</h1>
-            <div id="status-badge" class="badge">Checking...</div>
-        </header>
+  <div class="container">
+    <header>
+      <div>
+        <div class="kicker">Clawdbot</div>
+        <h1>Proactive Resource Monitor</h1>
+      </div>
+      <div class="header-right">
+        <div id="status-badge" class="badge">Loading…</div>
+        <div id="updated-at" class="muted small">Updated: --</div>
+      </div>
+    </header>
 
-        <main class="grid">
-            <section class="card col-6">
-                <h2>CPU</h2>
-                <div class="gauge-container">
-                    <div id="cpu-gauge" class="gauge">0</div>
-                </div>
-            </section>
+    <main class="grid">
+      <section class="card col-4">
+        <div class="card-top">
+          <h2>CPU</h2>
+          <div id="cpu-meta" class="muted small">--</div>
+        </div>
+        <div class="gauge-row">
+          <div id="cpu-gauge" class="gauge">—</div>
+          <div class="gauge-suffix">%</div>
+        </div>
+      </section>
 
-            <section class="card col-6">
-                <h2>Memory</h2>
-                <div class="gauge-container">
-                    <div id="mem-gauge" class="gauge">0</div>
-                </div>
-            </section>
+      <section class="card col-4">
+        <div class="card-top">
+          <h2>Memory</h2>
+          <div id="mem-meta" class="muted small">--</div>
+        </div>
+        <div class="gauge-row">
+          <div id="mem-gauge" class="gauge">—</div>
+          <div class="gauge-suffix">%</div>
+        </div>
+      </section>
 
-            <section class="card col-12">
-                <h2>Environment</h2>
-                <div id="sys-info" class="mono-text">Loading system metrics...</div>
-            </section>
+      <section class="card col-4">
+        <div class="card-top">
+          <h2>Disk</h2>
+          <div id="disk-meta" class="muted small">/</div>
+        </div>
+        <div class="gauge-row">
+          <div id="disk-gauge" class="gauge">—</div>
+          <div class="gauge-suffix">%</div>
+        </div>
+      </section>
 
-            <section class="card col-12">
-                <div class="card-header">
-                    <h2>Live Activity</h2>
-                    <div class="controls">
-                        <span class="badge filter">All</span>
-                        <span class="badge filter info">Info</span>
-                        <span class="badge filter error">Error</span>
-                    </div>
-                </div>
-                <div id="log-viewer" class="log-container mono-text">
-                    <div class="log-entry">Waiting for stream...</div>
-                </div>
-            </section>
+      <section class="card col-12">
+        <div class="card-header">
+          <h2>System</h2>
+          <div class="controls">
+            <button id="refresh" class="btn" type="button">Refresh</button>
+          </div>
+        </div>
+        <pre id="sys-info" class="mono-text" aria-label="system metrics">Loading…</pre>
+      </section>
 
-            <section class="card col-12">
-                <h2>Timeline</h2>
-                <div id="activity-history" class="activity-list">
-                    <div class="activity-item">
-                        <span class="time">--:--</span>
-                        <span class="event">Initializing tracker...</span>
-                    </div>
-                </div>
-            </section>
-        </main>
+      <section class="card col-12">
+        <div class="card-header">
+          <h2>Cron Health</h2>
+          <div id="health-badges" class="controls" aria-label="cron health badges">
+            <span class="badge">Cron: --</span>
+            <span class="badge">OK: --</span>
+            <span class="badge">Errors: --</span>
+          </div>
+        </div>
+        <div id="health-summary" class="health-summary">
+          <div class="health-line">Loading…</div>
+        </div>
+      </section>
 
-        <footer>
-            <p>Generated by Pi 🥧 • Nightly Innovation</p>
-        </footer>
-    </div>
-    <script src="script.js"></script>
+      <section class="card col-12">
+        <div class="card-header">
+          <h2>Cron Jobs</h2>
+          <div class="controls">
+            <span id="cron-updated" class="badge">Updated: --</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table" aria-label="Cron job status table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Status</th>
+                <th>Last Run</th>
+                <th>Next Run</th>
+                <th>Duration</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="cron-table-body">
+              <tr>
+                <td colspan="6" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p class="muted">Static dashboard • JSON generated by update_cron_data.py</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
