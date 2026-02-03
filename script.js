@@ -31,6 +31,20 @@ function fmtDuration(ms) {
   return `${m}m ${s}s`;
 }
 
+function fmtAgo(ms) {
+  if (!ms && ms !== 0) return '—';
+  const delta = Date.now() - ms;
+  if (delta < 0) return '—';
+  const sec = Math.floor(delta / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 function fmtUptime(sec) {
   if (!sec && sec !== 0) return '—';
   const d = Math.floor(sec / 86400);
@@ -71,6 +85,22 @@ function setBadge(el, text, cls) {
   if (cls) el.classList.add(cls);
 }
 
+function fmtMemGiB(kb) {
+  if (!kb && kb !== 0) return '—';
+  const gib = kb / 1024 / 1024;
+  return `${gib.toFixed(1)}GiB`;
+}
+
+function throttlingSummary(t) {
+  if (!t || !t.current) return null;
+  const flags = [];
+  if (t.current.underVoltage) flags.push('under-voltage');
+  if (t.current.freqCapped) flags.push('freq-capped');
+  if (t.current.throttled) flags.push('throttled');
+  if (t.current.softTempLimit) flags.push('temp-limit');
+  return flags.length ? flags.join(', ') : 'ok';
+}
+
 function renderSystem(data) {
   const sys = data?.system || {};
 
@@ -82,14 +112,24 @@ function renderSystem(data) {
   $('mem-meta').textContent = 'snapshot';
   $('disk-meta').textContent = '/';
 
+  const mi = sys.mem || null;
+  const load = sys.loadavg || null;
+
   const lines = [
     `Host: ${sys.hostname || '—'}`,
     `OS: ${[sys.os, sys.release].filter(Boolean).join(' ') || '—'} (${sys.arch || '—'})`,
     `Uptime: ${fmtUptime(sys.uptimeSec)}`,
+    `LoadAvg: ${load ? `${load['1m']} / ${load['5m']} / ${load['15m']}` : '—'}`,
     `CPU: ${sys.cpuUsagePct ?? '—'}%`,
-    `Memory: ${sys.memUsagePct ?? '—'}%`,
+    `CPU Temp: ${sys.cpuTempC ?? '—'}°C`,
+    `Memory: ${sys.memUsagePct ?? '—'}% (${mi ? `${fmtMemGiB(mi.availableKb)} free / ${fmtMemGiB(mi.totalKb)} total` : '—'})`,
     `Disk(/): ${sys.diskUsagePct ?? '—'}%`,
   ];
+
+  const th = throttlingSummary(sys.throttling);
+  if (th) {
+    lines.push(`RPi Throttling: ${th} (${sys.throttling?.hex || sys.throttling?.raw || '—'})`);
+  }
 
   $('sys-info').textContent = lines.join('\n');
 
@@ -101,13 +141,14 @@ function renderHealth(data) {
   const healthBadges = $('health-badges');
   const healthSummary = $('health-summary');
 
-  if (!data || data.error) {
+  if (!data || data.error || data.cronError) {
     healthBadges.innerHTML = [
       '<span class="badge">Cron: --</span>',
       '<span class="badge">OK: --</span>',
       '<span class="badge danger">Errors: --</span>',
     ].join('');
-    healthSummary.innerHTML = `<div class="health-line danger">Cron status unavailable${data?.error ? `: ${data.error}` : ''}</div>`;
+    const msg = data?.error || data?.cronError;
+    healthSummary.innerHTML = `<div class="health-line danger">Cron status unavailable${msg ? `: ${msg}` : ''}</div>`;
     return;
   }
 
@@ -143,6 +184,32 @@ function renderHealth(data) {
   ].join('');
 }
 
+function getFilters() {
+  const q = $('cron-filter')?.value?.trim()?.toLowerCase() || '';
+  const onlyErrors = !!$('cron-only-errors')?.checked;
+  const hideDisabled = !!$('cron-hide-disabled')?.checked;
+  return { q, onlyErrors, hideDisabled };
+}
+
+function rowClassForJob(j) {
+  const enabled = j.enabled;
+  const isError = statusLabel(j?.lastRun?.status) === 'error';
+  const nextMs = j?.nextRun?.atMs;
+  const overdue = enabled && nextMs && nextMs < Date.now();
+
+  const durMs = j?.lastRun?.durationMs;
+  const longRun = typeof durMs === 'number' && durMs >= 30000; // 30s+
+
+  return [
+    !enabled ? 'row-disabled' : '',
+    overdue ? 'row-overdue' : '',
+    isError ? 'row-error' : '',
+    longRun ? 'row-long' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 function renderCronTable(data) {
   const tbody = $('cron-table-body');
   const updated = $('cron-updated');
@@ -155,13 +222,34 @@ function renderCronTable(data) {
     return;
   }
 
-  updated.textContent = `Updated: ${fmtWhen(data.generatedAtIso)}`;
-  updated.classList.remove('danger');
+  const base = `Updated: ${fmtWhen(data.generatedAtIso)}`;
+  if (data.cronStale || data.cronError) {
+    updated.textContent = `${base} (stale)`;
+    updated.classList.remove('danger');
+    updated.classList.add('warning');
+  } else {
+    updated.textContent = base;
+    updated.classList.remove('danger');
+    updated.classList.remove('warning');
+  }
 
-  const jobs = (data.jobs || []).slice().sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
+  const filters = getFilters();
+
+  let jobs = (data.jobs || []).slice();
+  jobs = jobs.sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
+
+  jobs = jobs.filter((j) => {
+    if (filters.hideDisabled && !j.enabled) return false;
+    if (filters.onlyErrors && statusLabel(j?.lastRun?.status) !== 'error') return false;
+    if (filters.q) {
+      const hay = `${j?.name || ''} ${j?.schedule?.expr || ''} ${j?.lastRun?.error || ''}`.toLowerCase();
+      if (!hay.includes(filters.q)) return false;
+    }
+    return true;
+  });
 
   if (jobs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">No cron jobs found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">No cron jobs match your filters.</td></tr>';
     return;
   }
 
@@ -174,12 +262,13 @@ function renderCronTable(data) {
       const err = j?.lastRun?.error || '';
       const enabled = j.enabled;
       const expr = j?.schedule?.expr || '—';
+      const lastAgo = fmtAgo(j?.lastRun?.atMs);
 
       // basic escaping for title attribute
       const escTitle = String(err).replaceAll('"', '&quot;');
 
       return [
-        `<tr class="${enabled ? '' : 'row-disabled'}">`,
+        `<tr class="${rowClassForJob(j)}">`,
         '  <td>',
         '    <div class="job">',
         `      <div class="job-name">${j.name || '—'}</div>`,
@@ -187,7 +276,7 @@ function renderCronTable(data) {
         '    </div>',
         '  </td>',
         `  <td><span class="${statusClass(st)}">${st}</span></td>`,
-        `  <td class="mono">${last}</td>`,
+        `  <td class="mono">${last}<div class="muted small">${lastAgo}</div></td>`,
         `  <td class="mono">${next}</td>`,
         `  <td class="mono">${dur}</td>`,
         `  <td class="mono ${err ? 'danger-text' : 'muted'}" title="${escTitle}">${err || '—'}</td>`,
@@ -196,6 +285,8 @@ function renderCronTable(data) {
     })
     .join('\n');
 }
+
+let __lastData = null;
 
 async function fetchCronStatus() {
   const res = await fetch(`cron_status.json?cb=${Date.now()}`, { cache: 'no-store' });
@@ -209,13 +300,14 @@ async function refreshAll() {
 
   try {
     const data = await fetchCronStatus();
+    __lastData = data;
 
     renderSystem(data);
     renderCronTable(data);
     renderHealth(data);
 
-    const hasError = !!data.error;
-    setBadge(badge, hasError ? 'Degraded' : 'Online', hasError ? 'warning' : 'success');
+    const degraded = !!(data.error || data.cronError || data.cronStale);
+    setBadge(badge, degraded ? 'Degraded' : 'Online', degraded ? 'warning' : 'success');
   } catch (e) {
     console.error('Failed to refresh', e);
     renderCronTable({ error: String(e) });
@@ -228,5 +320,29 @@ $('refresh').addEventListener('click', () => {
   refreshAll();
 });
 
+function rerenderCronTable() {
+  if (!__lastData) return;
+  renderCronTable(__lastData);
+}
+
+function bindFilters() {
+  const rerender = () => {
+    // フィルタはクライアント側の表示だけを変えたいので、ネットワークを叩かない
+    if (__lastData) {
+      rerenderCronTable();
+      return;
+    }
+    refreshAll();
+  };
+
+  $('cron-filter')?.addEventListener('input', () => {
+    clearTimeout(window.__cronFilterTimer);
+    window.__cronFilterTimer = setTimeout(rerender, 150);
+  });
+  $('cron-only-errors')?.addEventListener('change', rerender);
+  $('cron-hide-disabled')?.addEventListener('change', rerender);
+}
+
+bindFilters();
 refreshAll();
 setInterval(refreshAll, 30000);

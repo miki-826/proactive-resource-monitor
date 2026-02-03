@@ -84,6 +84,9 @@
         <div class="card-header">
           <h2>Cron Jobs</h2>
           <div class="controls">
+            <input id="cron-filter" class="input" type="search" placeholder="Filter (name / schedule / error)…" aria-label="cron filter" />
+            <label class="check"><input id="cron-only-errors" type="checkbox" /> only errors</label>
+            <label class="check"><input id="cron-hide-disabled" type="checkbox" /> hide disabled</label>
             <span id="cron-updated" class="badge">Updated: --</span>
           </div>
         </div>

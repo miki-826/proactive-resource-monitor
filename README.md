@@ -6,9 +6,11 @@ Clawdbot を動かしているホストの **リソース状況** と **Cron（G
 ## できること
 
 - CPU 使用率 / メモリ使用率 / ディスク使用率（直近スナップショット）
-- ホスト情報（OS/アーキテクチャ/ホスト名/稼働時間など）
+- ホスト情報（OS/アーキテクチャ/ホスト名/稼働時間/LoadAvg/温度など）
+- Raspberry Pi のスロットリング状態（`vcgencmd` がある場合）
 - Clawdbot の Cron ジョブ一覧（最終実行/次回実行/所要時間/エラー）
 - Cron の健康状態サマリ（OK / Error / Unknown）
+- Cron 表のフィルタ（検索 / only errors / hide disabled）
 
 ## 仕組み
 

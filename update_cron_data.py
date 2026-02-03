@@ -56,6 +56,107 @@ def _safe_int(v: str) -> int | None:
         return None
 
 
+def _loadavg() -> dict[str, float] | None:
+    try:
+        # /proc/loadavg: "0.01 0.05 0.15 1/234 5678"
+        parts = _read_text("/proc/loadavg").split()
+        if len(parts) < 3:
+            return None
+        one = _safe_float(parts[0])
+        five = _safe_float(parts[1])
+        fifteen = _safe_float(parts[2])
+        if one is None or five is None or fifteen is None:
+            return None
+        return {"1m": one, "5m": five, "15m": fifteen}
+    except Exception:
+        return None
+
+
+def _cpu_temp_c() -> float | None:
+    """Try to read CPU temperature in Celsius (common on Raspberry Pi/Linux)."""
+    candidates = [
+        "/sys/class/thermal/thermal_zone0/temp",
+        "/sys/class/hwmon/hwmon0/temp1_input",
+    ]
+    for p in candidates:
+        try:
+            raw = _read_text(p).strip()
+            v = _safe_int(raw)
+            if v is None:
+                continue
+            # usually milli-degC
+            if v > 1000:
+                return round(v / 1000.0, 1)
+            return float(v)
+        except Exception:
+            continue
+    return None
+
+
+def _run_cmd(cmd: list[str], timeout_s: int = 20) -> tuple[int, str, str]:
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+        timeout=timeout_s,
+    )
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def _vcgencmd_get_throttled() -> dict[str, Any] | None:
+    """Return Raspberry Pi throttling info if vcgencmd is available.
+
+    vcgencmd get_throttled -> e.g. "throttled=0x0"
+    See: https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd
+    """
+
+    if shutil.which("vcgencmd") is None:
+        return None
+
+    try:
+        code, out, _err = _run_cmd(["vcgencmd", "get_throttled"], timeout_s=5)
+        if code != 0:
+            return None
+        out = out.strip()
+        if "=" not in out:
+            return None
+        _k, v = out.split("=", 1)
+        v = v.strip()
+        # expected hex like 0x50005
+        try:
+            bits = int(v, 16)
+        except Exception:
+            return {"raw": out}
+
+        # Bits summary (current):
+        # 0: under-voltage
+        # 1: arm frequency capped
+        # 2: currently throttled
+        # 3: soft temp limit active
+        # (historical) 16..19 mirrors 0..3
+        def has(bit: int) -> bool:
+            return bool(bits & (1 << bit))
+
+        current = {
+            "underVoltage": has(0),
+            "freqCapped": has(1),
+            "throttled": has(2),
+            "softTempLimit": has(3),
+        }
+        past = {
+            "underVoltage": has(16),
+            "freqCapped": has(17),
+            "throttled": has(18),
+            "softTempLimit": has(19),
+        }
+
+        return {"raw": out, "hex": v, "bits": bits, "current": current, "past": past}
+    except Exception:
+        return None
+
+
 @dataclass
 class CpuSample:
     total: int
@@ -130,8 +231,8 @@ def _cpu_usage_pct(now: CpuSample | None, now_ms: int) -> float | None:
     return round(usage, 1)
 
 
-def _mem_usage_pct() -> float | None:
-    """Compute memory usage percent from /proc/meminfo."""
+def _mem_info() -> dict[str, int] | None:
+    """Return memory info in kB from /proc/meminfo (total/available)."""
     try:
         meminfo = {}
         for line in _read_text("/proc/meminfo").splitlines():
@@ -144,12 +245,21 @@ def _mem_usage_pct() -> float | None:
         avail_kb = _safe_int(meminfo.get("MemAvailable", "").split()[0])
         if not total_kb or avail_kb is None:
             return None
-
-        used = total_kb - avail_kb
-        pct = (used / total_kb) * 100.0
-        return round(pct, 1)
+        return {"totalKb": total_kb, "availableKb": avail_kb}
     except Exception:
         return None
+
+
+def _mem_usage_pct() -> float | None:
+    """Compute memory usage percent from /proc/meminfo."""
+    mi = _mem_info()
+    if not mi:
+        return None
+    total_kb = mi["totalKb"]
+    avail_kb = mi["availableKb"]
+    used = total_kb - avail_kb
+    pct = (used / total_kb) * 100.0
+    return round(pct, 1)
 
 
 def _disk_usage_pct(path: str = "/") -> float | None:
@@ -175,18 +285,6 @@ def _uptime_seconds() -> int | None:
         return None
 
 
-def _run_cmd(cmd: list[str], timeout_s: int = 20) -> tuple[int, str, str]:
-    proc = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-        timeout=timeout_s,
-    )
-    return proc.returncode, proc.stdout, proc.stderr
-
-
 def main() -> int:
     generated_at_ms = int(time.time() * 1000)
 
@@ -194,19 +292,26 @@ def main() -> int:
 
     # --- system snapshot ---
     cpu_sample = _read_cpu_sample()
+    mem = _mem_info()
     system = {
         "hostname": platform.node() or None,
         "os": platform.system() or None,
         "release": platform.release() or None,
         "arch": platform.machine() or None,
         "uptimeSec": _uptime_seconds(),
+        "loadavg": _loadavg(),
+        "cpuTempC": _cpu_temp_c(),
+        "throttling": _vcgencmd_get_throttled(),
         "cpuUsagePct": _cpu_usage_pct(cpu_sample, generated_at_ms),
         "memUsagePct": _mem_usage_pct(),
+        "mem": mem,
         "diskUsagePct": _disk_usage_pct("/"),
     }
 
     # --- cron ---
     try:
+        # cron の取得は CLI の状態次第で遅くなることがあるため、短めにタイムアウト。
+        # 失敗時は直前の cron_status.json を読み込んで "stale" 扱いにする。
         code, out, err = _run_cmd(cron_cmd, timeout_s=20)
         if code != 0:
             raise RuntimeError(err.strip() or f"cron list failed: {code}")
@@ -251,12 +356,27 @@ def main() -> int:
         }
 
     except Exception as e:
+        # If the cron query fails (e.g., high load / CLI timeout), keep the last
+        # known jobs so the dashboard stays useful, and mark it as stale.
+        prev_jobs: list[dict[str, Any]] = []
+        prev_generated_at_iso: str | None = None
+        try:
+            if os.path.exists(OUT_PATH):
+                prev = json.loads(_read_text(OUT_PATH))
+                prev_jobs = prev.get("jobs", []) or []
+                prev_generated_at_iso = prev.get("generatedAtIso")
+        except Exception:
+            prev_jobs = []
+            prev_generated_at_iso = None
+
         out_obj = {
             "generatedAtMs": generated_at_ms,
             "generatedAtIso": _iso(generated_at_ms),
-            "error": str(e),
+            "cronStale": True,
+            "cronError": str(e),
+            "previousGeneratedAtIso": prev_generated_at_iso,
             "system": system,
-            "jobs": [],
+            "jobs": prev_jobs,
         }
 
     tmp_path = OUT_PATH + ".tmp"
