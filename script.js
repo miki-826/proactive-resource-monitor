@@ -36,13 +36,13 @@ function fmtAgo(ms) {
   const delta = Date.now() - ms;
   if (delta < 0) return '—';
   const sec = Math.floor(delta / 1000);
-  if (sec < 60) return `${sec}s ago`;
+  if (sec < 60) return `${sec}秒前`;
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return `${min}分前`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}時間前`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d}日前`;
 }
 
 function fmtUptime(sec) {
@@ -108,8 +108,8 @@ function renderSystem(data) {
   setGauge('mem-gauge', sys.memUsagePct);
   setGauge('disk-gauge', sys.diskUsagePct);
 
-  $('cpu-meta').textContent = sys.cpuUsagePct === null || sys.cpuUsagePct === undefined ? 'warming up…' : 'snapshot';
-  $('mem-meta').textContent = 'snapshot';
+  $('cpu-meta').textContent = sys.cpuUsagePct === null || sys.cpuUsagePct === undefined ? '計測中…' : 'スナップショット';
+  $('mem-meta').textContent = 'スナップショット';
   $('disk-meta').textContent = '/';
 
   const mi = sys.mem || null;
@@ -134,7 +134,7 @@ function renderSystem(data) {
   $('sys-info').textContent = lines.join('\n');
 
   const updatedAt = data?.generatedAtIso ? fmtWhen(data.generatedAtIso) : '—';
-  $('updated-at').textContent = `Updated: ${updatedAt}`;
+  $('updated-at').textContent = `更新: ${updatedAt}`;
 }
 
 function renderHealth(data) {
@@ -148,7 +148,7 @@ function renderHealth(data) {
       '<span class="badge danger">Errors: --</span>',
     ].join('');
     const msg = data?.error || data?.cronError;
-    healthSummary.innerHTML = `<div class="health-line danger">Cron status unavailable${msg ? `: ${msg}` : ''}</div>`;
+    healthSummary.innerHTML = `<div class="health-line danger">Cronステータスを取得できません${msg ? `: ${msg}` : ''}</div>`;
     return;
   }
 
@@ -161,13 +161,13 @@ function renderHealth(data) {
   ].join('');
 
   if (s.enabledCount === 0) {
-    healthSummary.innerHTML = '<div class="health-line neutral">No enabled cron jobs detected.</div>';
+    healthSummary.innerHTML = '<div class="health-line neutral">有効なCronジョブが見つかりません。</div>';
     return;
   }
 
   if (s.errorCount === 0) {
     const note = s.unknownCount ? `（未実行: ${s.unknownCount}）` : '';
-    healthSummary.innerHTML = `<div class="health-line success">All enabled cron jobs look healthy. ${note}</div>`;
+    healthSummary.innerHTML = `<div class="health-line success">有効なCronジョブは正常です。${note}</div>`;
     return;
   }
 
@@ -179,7 +179,7 @@ function renderHealth(data) {
     .join('');
 
   healthSummary.innerHTML = [
-    `<div class="health-line danger">${s.errorCount} cron job(s) failing.</div>`,
+    `<div class="health-line danger">${s.errorCount} 件のCronジョブが失敗しています。</div>`,
     `<ul class="health-list">${items}</ul>`,
   ].join('');
 }
@@ -215,16 +215,16 @@ function renderCronTable(data) {
   const updated = $('cron-updated');
 
   if (!data || data.error) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">Failed to load cron jobs${data?.error ? `: ${data.error}` : ''}</td></tr>`;
-    updated.textContent = 'Updated: --';
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">Cronジョブの読み込みに失敗しました${data?.error ? `: ${data.error}` : ''}</td></tr>`;
+    updated.textContent = '更新: --';
     updated.classList.remove('success');
     updated.classList.add('danger');
     return;
   }
 
-  const base = `Updated: ${fmtWhen(data.generatedAtIso)}`;
+  const base = `更新: ${fmtWhen(data.generatedAtIso)}`;
   if (data.cronStale || data.cronError) {
-    updated.textContent = `${base} (stale)`;
+    updated.textContent = `${base}（古い可能性）`;
     updated.classList.remove('danger');
     updated.classList.add('warning');
   } else {
@@ -249,7 +249,7 @@ function renderCronTable(data) {
   });
 
   if (jobs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">No cron jobs match your filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">フィルタに一致するCronジョブがありません。</td></tr>';
     return;
   }
 
@@ -296,7 +296,7 @@ async function fetchCronStatus() {
 
 async function refreshAll() {
   const badge = $('status-badge');
-  setBadge(badge, 'Loading…');
+  setBadge(badge, '読込中…');
 
   try {
     const data = await fetchCronStatus();
@@ -307,12 +307,12 @@ async function refreshAll() {
     renderHealth(data);
 
     const degraded = !!(data.error || data.cronError || data.cronStale);
-    setBadge(badge, degraded ? 'Degraded' : 'Online', degraded ? 'warning' : 'success');
+    setBadge(badge, degraded ? '注意' : '稼働中', degraded ? 'warning' : 'success');
   } catch (e) {
     console.error('Failed to refresh', e);
     renderCronTable({ error: String(e) });
     renderHealth({ error: String(e) });
-    setBadge(badge, 'Offline', 'danger');
+    setBadge(badge, 'オフライン', 'danger');
   }
 }
 
@@ -343,6 +343,88 @@ function bindFilters() {
   $('cron-hide-disabled')?.addEventListener('change', rerender);
 }
 
+function toast(msg) {
+  const el = $('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+const STORAGE_KEY = 'prm:v1';
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePrefs(patch) {
+  const cur = loadPrefs();
+  const next = { ...cur, ...patch };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
+
+let __refreshTimer = null;
+
+function applyAutoRefresh() {
+  const enabled = !!$('auto-refresh')?.checked;
+  const intervalMs = Number($('refresh-interval')?.value || 30000);
+
+  savePrefs({ autoRefresh: enabled, refreshIntervalMs: intervalMs });
+
+  if (__refreshTimer) {
+    clearInterval(__refreshTimer);
+    __refreshTimer = null;
+  }
+  if (enabled) {
+    __refreshTimer = setInterval(refreshAll, intervalMs);
+  }
+}
+
+function initPrefs() {
+  const p = loadPrefs();
+
+  if ($('cron-filter') && typeof p.cronFilter === 'string') $('cron-filter').value = p.cronFilter;
+  if ($('cron-only-errors') && typeof p.onlyErrors === 'boolean') $('cron-only-errors').checked = p.onlyErrors;
+  if ($('cron-hide-disabled') && typeof p.hideDisabled === 'boolean') $('cron-hide-disabled').checked = p.hideDisabled;
+
+  if ($('auto-refresh') && typeof p.autoRefresh === 'boolean') $('auto-refresh').checked = p.autoRefresh;
+  if ($('refresh-interval') && typeof p.refreshIntervalMs === 'number') {
+    $('refresh-interval').value = String(p.refreshIntervalMs);
+  }
+}
+
+function bindHeaderControls() {
+  $('auto-refresh')?.addEventListener('change', applyAutoRefresh);
+  $('refresh-interval')?.addEventListener('change', applyAutoRefresh);
+
+  $('copy-sys')?.addEventListener('click', async () => {
+    const text = $('sys-info')?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('System情報をクリップボードにコピーしました');
+    } catch {
+      toast('コピーに失敗しました（ブラウザ権限を確認してください）');
+    }
+  });
+
+  // persist filter inputs
+  $('cron-filter')?.addEventListener('input', () => savePrefs({ cronFilter: $('cron-filter').value }));
+  $('cron-only-errors')?.addEventListener('change', () => savePrefs({ onlyErrors: $('cron-only-errors').checked }));
+  $('cron-hide-disabled')?.addEventListener('change', () => savePrefs({ hideDisabled: $('cron-hide-disabled').checked }));
+}
+
+initPrefs();
 bindFilters();
+bindHeaderControls();
+applyAutoRefresh();
 refreshAll();
-setInterval(refreshAll, 30000);
