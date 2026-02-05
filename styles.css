@@ -13,6 +13,16 @@
   --radius: 14px;
 }
 
+/* Light theme (toggle via <body data-theme="light">) */
+body[data-theme="light"] {
+  --bg: #f6f7fb;
+  --card: rgba(255, 255, 255, 0.75);
+  --card-border: rgba(15, 23, 42, 0.10);
+  --text: rgba(15, 23, 42, 0.95);
+  --muted: rgba(15, 23, 42, 0.60);
+  --shadow: 0 10px 30px rgba(2, 6, 23, 0.10);
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -25,6 +35,12 @@ body {
   display: flex;
   justify-content: center;
   overflow-x: hidden;
+}
+
+body[data-theme="light"] {
+  background: radial-gradient(1200px 600px at 15% 0%, rgba(99, 102, 241, 0.12), transparent 55%),
+              radial-gradient(900px 500px at 90% 10%, rgba(34, 211, 238, 0.10), transparent 50%),
+              var(--bg);
 }
 
 .container {
@@ -321,3 +337,34 @@ footer {
   .col-4 { grid-column: span 12; }
   .container { padding: 18px; }
 }
+
+/* Light-theme fine tuning for surfaces that were previously hard-coded dark */
+body[data-theme="light"] .badge,
+body[data-theme="light"] .btn,
+body[data-theme="light"] .input,
+body[data-theme="light"] .select {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+body[data-theme="light"] .mono-text,
+body[data-theme="light"] .table-wrap,
+body[data-theme="light"] .health-summary,
+body[data-theme="light"] .toast {
+  background: rgba(255, 255, 255, 0.70);
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+body[data-theme="light"] header,
+body[data-theme="light"] footer {
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+body[data-theme="light"] .table thead th,
+body[data-theme="light"] h2,
+body[data-theme="light"] .kicker {
+  color: rgba(15, 23, 42, 0.60);
+}
+
+body[data-theme="light"] .table tbody tr:hover { background: rgba(2, 6, 23, 0.03); }
+body[data-theme="light"] .row-long td { background: rgba(34, 211, 238, 0.08); }
+body[data-theme="light"] .row-overdue td { background: rgba(251, 191, 36, 0.10); }

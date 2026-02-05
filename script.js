@@ -373,6 +373,32 @@ function savePrefs(patch) {
   }
 }
 
+function applyTheme(theme) {
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = t;
+
+  const btn = $('theme-toggle');
+  if (btn) btn.textContent = t === 'light' ? 'Dark' : 'Light';
+}
+
+function initTheme() {
+  const p = loadPrefs();
+  const saved = typeof p.theme === 'string' ? p.theme : null;
+  const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  const initial = saved || (prefersLight ? 'light' : 'dark');
+  applyTheme(initial);
+}
+
+function bindThemeToggle() {
+  $('theme-toggle')?.addEventListener('click', () => {
+    const cur = document.body.dataset.theme === 'light' ? 'light' : 'dark';
+    const next = cur === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+    savePrefs({ theme: next });
+    toast(`Theme: ${next}`);
+  });
+}
+
 let __refreshTimer = null;
 
 function applyAutoRefresh() {
@@ -422,6 +448,9 @@ function bindHeaderControls() {
   $('cron-only-errors')?.addEventListener('change', () => savePrefs({ onlyErrors: $('cron-only-errors').checked }));
   $('cron-hide-disabled')?.addEventListener('change', () => savePrefs({ hideDisabled: $('cron-hide-disabled').checked }));
 }
+
+initTheme();
+bindThemeToggle();
 
 initPrefs();
 bindFilters();
