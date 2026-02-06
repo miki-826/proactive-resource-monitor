@@ -184,6 +184,134 @@ function renderHealth(data) {
   ].join('');
 }
 
+// --- Alerts ---
+let __lastAlertFingerprint = null;
+
+function readThresholdInput(id, fallback) {
+  const el = $(id);
+  const v = el ? Number(el.value) : NaN;
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function getAlertSettingsFromUI() {
+  return {
+    enabled: !!$('alerts-enabled')?.checked,
+    notify: !!$('alerts-notify')?.checked,
+    thCpu: readThresholdInput('th-cpu', 90),
+    thMem: readThresholdInput('th-mem', 90),
+    thDisk: readThresholdInput('th-disk', 90),
+    thTemp: readThresholdInput('th-temp', 75),
+  };
+}
+
+function computeAlerts(data, settings) {
+  if (!settings.enabled) {
+    return { level: 'neutral', items: [], message: 'アラートは無効です。' };
+  }
+
+  if (!data || data.error || data.cronError) {
+    return { level: 'danger', items: [], message: 'Cronステータスを取得できません（offline / error）' };
+  }
+
+  const sys = data.system || {};
+  const items = [];
+
+  const cpu = sys.cpuUsagePct;
+  const mem = sys.memUsagePct;
+  const disk = sys.diskUsagePct;
+  const temp = sys.cpuTempC;
+
+  if (typeof cpu === 'number' && cpu >= settings.thCpu) items.push({ level: 'warn', text: `CPU 高負荷: ${cpu}%（閾値 ${settings.thCpu}%）` });
+  if (typeof mem === 'number' && mem >= settings.thMem) items.push({ level: 'warn', text: `Memory 使用率: ${mem}%（閾値 ${settings.thMem}%）` });
+  if (typeof disk === 'number' && disk >= settings.thDisk) items.push({ level: 'warn', text: `Disk(/) 使用率: ${disk}%（閾値 ${settings.thDisk}%）` });
+  if (typeof temp === 'number' && temp >= settings.thTemp) items.push({ level: 'warn', text: `CPU 温度: ${temp}°C（閾値 ${settings.thTemp}°C）` });
+
+  const s = summarizeHealth(data.jobs || []);
+  if (s.errorCount > 0) items.push({ level: 'danger', text: `Cron 失敗: ${s.errorCount} 件` });
+  if (s.enabledCount > 0 && s.unknownCount > 0) items.push({ level: 'neutral', text: `Cron 未実行: ${s.unknownCount} 件` });
+
+  if (items.length === 0) return { level: 'ok', items: [], message: 'OK（閾値内）' };
+
+  const worst = items.some((x) => x.level === 'danger') ? 'danger' : items.some((x) => x.level === 'warn') ? 'warn' : 'neutral';
+  return { level: worst, items, message: null };
+}
+
+function renderAlerts(result) {
+  const box = $('alerts-summary');
+  if (!box) return;
+
+  if (result.message) {
+    const cls = result.level === 'danger' ? 'danger' : result.level === 'warn' ? 'warn' : result.level === 'ok' ? 'ok' : 'muted';
+    box.innerHTML = `<div class="alerts-line ${cls}">${result.message}</div>`;
+    return;
+  }
+
+  const headerCls = result.level === 'danger' ? 'danger' : result.level === 'warn' ? 'warn' : 'muted';
+  const header = result.level === 'danger' ? '要対応' : '注意';
+  const items = result.items.map((x) => `<li>${x.text}</li>`).join('');
+  box.innerHTML = [`<div class="alerts-line ${headerCls}">${header}</div>`, `<ul class="alerts-list">${items}</ul>`].join('');
+}
+
+function maybeNotify(result, settings) {
+  if (!settings.enabled || !settings.notify) return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  // Notify only when we have warning/danger and something changed.
+  const fingerprint = JSON.stringify({ level: result.level, items: (result.items || []).map((x) => x.text).sort() });
+  if (fingerprint === __lastAlertFingerprint) return;
+  __lastAlertFingerprint = fingerprint;
+
+  if (result.level === 'warn' || result.level === 'danger') {
+    const title = result.level === 'danger' ? 'PRM: 要対応' : 'PRM: 注意';
+    const body = (result.items || []).slice(0, 4).map((x) => x.text).join('\n');
+    try {
+      new Notification(title, { body });
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function bindAlertControls() {
+  const persist = () => {
+    const s = getAlertSettingsFromUI();
+    savePrefs({
+      alertsEnabled: s.enabled,
+      alertsNotify: s.notify,
+      thCpu: s.thCpu,
+      thMem: s.thMem,
+      thDisk: s.thDisk,
+      thTemp: s.thTemp,
+    });
+    if (__lastData) {
+      const r = computeAlerts(__lastData, s);
+      renderAlerts(r);
+    }
+  };
+
+  ['alerts-enabled', 'alerts-notify', 'th-cpu', 'th-mem', 'th-disk', 'th-temp'].forEach((id) => {
+    $(id)?.addEventListener('change', persist);
+    $(id)?.addEventListener('input', () => {
+      clearTimeout(window.__alertsTimer);
+      window.__alertsTimer = setTimeout(persist, 120);
+    });
+  });
+
+  $('notify-permission')?.addEventListener('click', async () => {
+    if (!('Notification' in window)) {
+      toast('このブラウザは通知に対応していません');
+      return;
+    }
+    try {
+      const p = await Notification.requestPermission();
+      toast(`通知権限: ${p}`);
+    } catch {
+      toast('通知権限の要求に失敗しました');
+    }
+  });
+}
+
 function getFilters() {
   const q = $('cron-filter')?.value?.trim()?.toLowerCase() || '';
   const onlyErrors = !!$('cron-only-errors')?.checked;
@@ -417,12 +545,18 @@ async function refreshAll() {
     renderCronTable(data);
     renderHealth(data);
 
+    const alertSettings = getAlertSettingsFromUI();
+    const alertResult = computeAlerts(data, alertSettings);
+    renderAlerts(alertResult);
+    maybeNotify(alertResult, alertSettings);
+
     const degraded = !!(data.error || data.cronError || data.cronStale);
     setBadge(badge, degraded ? '注意' : '稼働中', degraded ? 'warning' : 'success');
   } catch (e) {
     console.error('Failed to refresh', e);
     renderCronTable({ error: String(e) });
     renderHealth({ error: String(e) });
+    renderAlerts({ level: 'danger', items: [], message: `取得失敗: ${String(e)}` });
     setBadge(badge, 'オフライン', 'danger');
   }
 }
@@ -539,6 +673,15 @@ function initPrefs() {
   if ($('refresh-interval') && typeof p.refreshIntervalMs === 'number') {
     $('refresh-interval').value = String(p.refreshIntervalMs);
   }
+
+  // alerts
+  if ($('alerts-enabled') && typeof p.alertsEnabled === 'boolean') $('alerts-enabled').checked = p.alertsEnabled;
+  if ($('alerts-notify') && typeof p.alertsNotify === 'boolean') $('alerts-notify').checked = p.alertsNotify;
+
+  if ($('th-cpu') && typeof p.thCpu === 'number') $('th-cpu').value = String(p.thCpu);
+  if ($('th-mem') && typeof p.thMem === 'number') $('th-mem').value = String(p.thMem);
+  if ($('th-disk') && typeof p.thDisk === 'number') $('th-disk').value = String(p.thDisk);
+  if ($('th-temp') && typeof p.thTemp === 'number') $('th-temp').value = String(p.thTemp);
 }
 
 function bindHeaderControls() {
@@ -555,6 +698,28 @@ function bindHeaderControls() {
     }
   });
 
+  $('download-json')?.addEventListener('click', () => {
+    if (!__lastData) {
+      toast('まだデータがありません');
+      return;
+    }
+    try {
+      const blob = new Blob([JSON.stringify(__lastData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replaceAll(':', '').replaceAll('.', '');
+      a.href = url;
+      a.download = `cron_status_${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('JSONを保存しました');
+    } catch {
+      toast('JSON保存に失敗しました');
+    }
+  });
+
   // persist filter inputs
   $('cron-filter')?.addEventListener('input', () => savePrefs({ cronFilter: $('cron-filter').value }));
   $('cron-only-errors')?.addEventListener('change', () => savePrefs({ onlyErrors: $('cron-only-errors').checked }));
@@ -567,5 +732,6 @@ bindThemeToggle();
 initPrefs();
 bindFilters();
 bindHeaderControls();
+bindAlertControls();
 applyAutoRefresh();
 refreshAll();

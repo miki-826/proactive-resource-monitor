@@ -88,12 +88,35 @@
         </div>
       </section>
 
+      <section class="card col-12" id="alerts-card">
+        <div class="card-header">
+          <h2>Alerts</h2>
+          <div class="controls">
+            <label class="check"><input id="alerts-enabled" type="checkbox" checked /> アラート</label>
+            <label class="check"><input id="alerts-notify" type="checkbox" /> 通知</label>
+            <button id="notify-permission" class="btn" type="button">通知権限</button>
+            <span class="muted small">閾値: CPU</span>
+            <input id="th-cpu" class="input input-mini" type="number" min="1" max="100" step="1" value="90" aria-label="cpu threshold" />
+            <span class="muted small">Mem</span>
+            <input id="th-mem" class="input input-mini" type="number" min="1" max="100" step="1" value="90" aria-label="mem threshold" />
+            <span class="muted small">Disk</span>
+            <input id="th-disk" class="input input-mini" type="number" min="1" max="100" step="1" value="90" aria-label="disk threshold" />
+            <span class="muted small">Temp</span>
+            <input id="th-temp" class="input input-mini" type="number" min="1" max="110" step="1" value="75" aria-label="temp threshold" />
+          </div>
+        </div>
+        <div id="alerts-summary" class="alerts-summary">
+          <div class="alerts-line muted">Loading…</div>
+        </div>
+      </section>
+
       <section class="card col-12">
         <div class="card-header">
           <h2>System</h2>
           <div class="controls">
             <button id="refresh" class="btn" type="button">更新</button>
             <button id="copy-sys" class="btn" type="button">Systemをコピー</button>
+            <button id="download-json" class="btn" type="button">JSONを保存</button>
           </div>
         </div>
         <pre id="sys-info" class="mono-text" aria-label="system metrics">Loading…</pre>

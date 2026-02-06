@@ -201,6 +201,12 @@ h2 {
   min-width: 260px;
 }
 
+.input-mini {
+  min-width: 78px;
+  width: 78px;
+  padding: 8px 8px;
+}
+
 .input::placeholder { color: rgba(255, 255, 255, 0.45); }
 
 .select {
@@ -253,6 +259,25 @@ h2 {
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.25);
   padding: 14px;
+}
+
+/* --- Alerts --- */
+.alerts-summary {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 14px;
+}
+
+.alerts-line { font-size: 14px; line-height: 1.5; }
+.alerts-line.ok { color: color-mix(in oklab, var(--ok) 70%, white); }
+.alerts-line.warn { color: color-mix(in oklab, var(--warn) 70%, white); }
+.alerts-line.danger { color: color-mix(in oklab, var(--err) 70%, white); }
+
+.alerts-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .health-line { font-size: 14px; line-height: 1.5; }
@@ -349,6 +374,7 @@ body[data-theme="light"] .select {
 body[data-theme="light"] .mono-text,
 body[data-theme="light"] .table-wrap,
 body[data-theme="light"] .health-summary,
+body[data-theme="light"] .alerts-summary,
 body[data-theme="light"] .toast {
   background: rgba(255, 255, 255, 0.70);
   border-color: rgba(15, 23, 42, 0.10);
