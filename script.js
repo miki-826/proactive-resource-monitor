@@ -294,6 +294,116 @@ async function fetchCronStatus() {
   return await res.json();
 }
 
+
+async function fetchResourceHistory() {
+  const res = await fetch(`resource_history.json?cb=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+
+function drawLineChart(canvasId, points, valueKey, opts = {}) {
+  const canvas = $(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const w = cssW;
+  const h = cssH;
+  const pad = 10;
+
+  const values = points
+    .map((p) => (p && typeof p[valueKey] === 'number' ? p[valueKey] : null))
+    .filter((v) => v !== null);
+
+  ctx.clearRect(0, 0, w, h);
+
+  // background grid
+  const isLight = document.body.dataset.theme === 'light';
+  ctx.strokeStyle = isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(148, 163, 184, 0.10)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 3; i++) {
+    const y = pad + ((h - pad * 2) * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(w - pad, y);
+    ctx.stroke();
+  }
+
+  if (!values.length) {
+    ctx.fillStyle = isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(226, 232, 240, 0.55)';
+    ctx.font = '12px Inter, system-ui, sans-serif';
+    ctx.fillText('No data', pad, pad + 14);
+    return;
+  }
+
+  const min = opts.min !== undefined ? opts.min : Math.min(...values);
+  const max = opts.max !== undefined ? opts.max : Math.max(...values);
+  const span = max - min || 1;
+
+  const n = points.length;
+  const xs = (i) => pad + ((w - pad * 2) * i) / Math.max(1, n - 1);
+  const ys = (v) => pad + (h - pad * 2) * (1 - (v - min) / span);
+
+  ctx.strokeStyle =
+    opts.stroke || (isLight ? 'rgba(2, 132, 199, 0.95)' : 'rgba(34, 211, 238, 0.95)');
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+
+  let started = false;
+  for (let i = 0; i < points.length; i++) {
+    const v = points[i] && typeof points[i][valueKey] === 'number' ? points[i][valueKey] : null;
+    if (v === null) continue;
+    const x = xs(i);
+    const y = ys(v);
+    if (!started) {
+      ctx.moveTo(x, y);
+      started = true;
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+
+  // last value label
+  const last = values[values.length - 1];
+  ctx.fillStyle = isLight ? 'rgba(15, 23, 42, 0.55)' : 'rgba(226, 232, 240, 0.65)';
+  ctx.font = '12px Inter, system-ui, sans-serif';
+  const suffix = opts.suffix || '';
+  ctx.fillText(`${last}${suffix}`, pad, h - 8);
+}
+
+async function refreshTrends() {
+  const meta = $('trend-meta');
+
+  try {
+    const h = await fetchResourceHistory();
+    const pts = (h && h.points) || [];
+
+    // if we have too many points (e.g. second-level sampling), only plot the last N.
+    const maxPlot = 720; // good enough for 24h @ 2min or 12h @ 1min
+    const points = pts.length > maxPlot ? pts.slice(-maxPlot) : pts;
+
+    drawLineChart('trend-cpu', points, 'cpu', { min: 0, max: 100, suffix: '%' });
+    drawLineChart('trend-mem', points, 'mem', { min: 0, max: 100, suffix: '%' });
+    drawLineChart('trend-temp', points, 'tempC', { suffix: '°C' });
+
+    if (meta) {
+      const count = pts.length;
+      meta.textContent = `points: ${count} / retention: ${Math.round((h.retentionMs || 0) / 3600000)}h`;
+    }
+  } catch (e) {
+    // history is optional; keep silent
+    if (meta) meta.textContent = 'resource_history.json が未生成（または取得失敗）';
+  }
+}
+
 async function refreshAll() {
   const badge = $('status-badge');
   setBadge(badge, '読込中…');
@@ -303,6 +413,7 @@ async function refreshAll() {
     __lastData = data;
 
     renderSystem(data);
+    refreshTrends();
     renderCronTable(data);
     renderHealth(data);
 
@@ -394,6 +505,7 @@ function bindThemeToggle() {
     const cur = document.body.dataset.theme === 'light' ? 'light' : 'dark';
     const next = cur === 'light' ? 'dark' : 'light';
     applyTheme(next);
+    refreshTrends();
     savePrefs({ theme: next });
     toast(`Theme: ${next}`);
   });

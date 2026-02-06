@@ -1,7 +1,12 @@
 # Generated data
 cron_status.json
+resource_history.json
 .cpu_state.json
 
 # OS / editor
 .DS_Store
 *.swp
+
+# Python
+__pycache__/
+*.pyc

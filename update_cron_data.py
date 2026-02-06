@@ -11,6 +11,7 @@ Designed to be run periodically (cron/systemd timer).
 
 Outputs:
   - cron_status.json (same directory)
+  - resource_history.json (time-series for charts; same directory)
   - .cpu_state.json (internal state for CPU usage diff; same directory)
 """
 
@@ -29,6 +30,12 @@ from typing import Any
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.join(HERE, "cron_status.json")
 CPU_STATE_PATH = os.path.join(HERE, ".cpu_state.json")
+HISTORY_PATH = os.path.join(HERE, "resource_history.json")
+
+# Keep the dashboard snappy: retain a bounded window of samples.
+# (24h @ 60s interval = 1440 points)
+HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000
+HISTORY_MAX_POINTS = 2000
 
 
 def _iso(ms: int | None) -> str | None:
@@ -285,6 +292,63 @@ def _uptime_seconds() -> int | None:
         return None
 
 
+def _load_history() -> dict[str, Any]:
+    try:
+        if not os.path.exists(HISTORY_PATH):
+            return {"generatedAtMs": None, "retentionMs": HISTORY_RETENTION_MS, "points": []}
+        return json.loads(_read_text(HISTORY_PATH))
+    except Exception:
+        return {"generatedAtMs": None, "retentionMs": HISTORY_RETENTION_MS, "points": []}
+
+
+def _save_history(obj: dict[str, Any]) -> None:
+    tmp = HISTORY_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, HISTORY_PATH)
+
+
+def _append_history(now_ms: int, system: dict[str, Any]) -> None:
+    """Append a single system snapshot to resource_history.json.
+
+    This file is intentionally small and stable for front-end charts.
+    """
+
+    hist = _load_history()
+    points = hist.get("points", []) or []
+
+    # only keep what we chart (avoid leaking large objects)
+    p = {
+        "atMs": now_ms,
+        "cpu": system.get("cpuUsagePct"),
+        "mem": system.get("memUsagePct"),
+        "disk": system.get("diskUsagePct"),
+        "tempC": system.get("cpuTempC"),
+        "load1": (system.get("loadavg") or {}).get("1m"),
+    }
+
+    # de-dup if the generator is triggered twice in the same ms
+    if points and points[-1].get("atMs") == now_ms:
+        points[-1] = p
+    else:
+        points.append(p)
+
+    cutoff = now_ms - HISTORY_RETENTION_MS
+    points = [x for x in points if isinstance(x, dict) and (x.get("atMs") or 0) >= cutoff]
+    if len(points) > HISTORY_MAX_POINTS:
+        points = points[-HISTORY_MAX_POINTS:]
+
+    out = {
+        "generatedAtMs": now_ms,
+        "generatedAtIso": _iso(now_ms),
+        "retentionMs": HISTORY_RETENTION_MS,
+        "maxPoints": HISTORY_MAX_POINTS,
+        "points": points,
+    }
+    _save_history(out)
+
+
 def main() -> int:
     generated_at_ms = int(time.time() * 1000)
 
@@ -307,6 +371,12 @@ def main() -> int:
         "mem": mem,
         "diskUsagePct": _disk_usage_pct("/"),
     }
+
+    # Always try to update the history; failures should not break the main JSON.
+    try:
+        _append_history(generated_at_ms, system)
+    except Exception:
+        pass
 
     # --- cron ---
     try:

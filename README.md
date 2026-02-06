@@ -37,3 +37,12 @@ python3 update_cron_data.py
 
 ---
 Created by Pi
+
+## 追加: リソース推移（Trends）
+
+`update_cron_data.py` は、`cron_status.json` に加えて **`resource_history.json`** を更新します。
+これにより、ダッシュボードに **過去24時間の CPU / メモリ / 温度の推移** が表示されます。
+
+- 保持: 24時間（最大 2000 点）
+- 生成間隔は運用側（cron / timer）に依存します
+

@@ -67,6 +67,29 @@
 
       <section class="card col-12">
         <div class="card-header">
+          <h2>Trends（24h）</h2>
+          <div class="controls">
+            <span id="trend-meta" class="muted small">resource_history.json がある場合のみ表示</span>
+          </div>
+        </div>
+        <div class="trend-grid" aria-label="resource trends">
+          <div class="trend-item">
+            <div class="trend-title">CPU %</div>
+            <canvas id="trend-cpu" class="trend-canvas" width="900" height="180"></canvas>
+          </div>
+          <div class="trend-item">
+            <div class="trend-title">Memory %</div>
+            <canvas id="trend-mem" class="trend-canvas" width="900" height="180"></canvas>
+          </div>
+          <div class="trend-item">
+            <div class="trend-title">Temp °C</div>
+            <canvas id="trend-temp" class="trend-canvas" width="900" height="180"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="card col-12">
+        <div class="card-header">
           <h2>System</h2>
           <div class="controls">
             <button id="refresh" class="btn" type="button">更新</button>
