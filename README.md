@@ -11,6 +11,7 @@ Clawdbot を動かしているホストの **リソース状況** と **Cron（G
 - Clawdbot の Cron ジョブ一覧（最終実行/次回実行/所要時間/エラー）
 - Cron の健康状態サマリ（OK / Error / Unknown）
 - Cron 表のフィルタ（検索 / only errors / hide disabled）
+- セキュリティ: Cron ジョブ名やエラー文字列は **HTMLエスケープ** して表示（XSS対策）
 
 ## 仕組み
 

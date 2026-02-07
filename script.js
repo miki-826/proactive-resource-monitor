@@ -2,6 +2,16 @@ function $(id) {
   return document.getElementById(id);
 }
 
+
+function escapeHtml(v) {
+  return String(v ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function fmtWhen(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -174,7 +184,7 @@ function renderHealth(data) {
   const items = s.errorJobs
     .map((j) => {
       const err = j?.lastRun?.error || 'Unknown error';
-      return `<li><span class="mono">${j.name}</span><span class="muted"> — ${err}</span></li>`;
+      return `<li><span class="mono">${escapeHtml(j.name || '—')}</span><span class="muted"> — ${escapeHtml(err)}</span></li>`;
     })
     .join('');
 
@@ -392,22 +402,25 @@ function renderCronTable(data) {
       const expr = j?.schedule?.expr || '—';
       const lastAgo = fmtAgo(j?.lastRun?.atMs);
 
-      // basic escaping for title attribute
-      const escTitle = String(err).replaceAll('"', '&quot;');
+      // Escape untrusted strings (cron job names / errors may contain arbitrary text)
+      const escName = escapeHtml(j.name || '—');
+      const escExpr = escapeHtml(expr);
+      const escErr = escapeHtml(err || '—');
+      const escTitle = escapeHtml(err || '');
 
       return [
         `<tr class="${rowClassForJob(j)}">`,
         '  <td>',
         '    <div class="job">',
-        `      <div class="job-name">${j.name || '—'}</div>`,
-        `      <div class="job-meta muted">${enabled ? 'enabled' : 'disabled'} • ${expr}</div>`,
+        `      <div class="job-name">${escName}</div>`,
+        `      <div class="job-meta muted">${enabled ? 'enabled' : 'disabled'} • ${escExpr}</div>`,
         '    </div>',
         '  </td>',
         `  <td><span class="${statusClass(st)}">${st}</span></td>`,
         `  <td class="mono">${last}<div class="muted small">${lastAgo}</div></td>`,
         `  <td class="mono">${next}</td>`,
         `  <td class="mono">${dur}</td>`,
-        `  <td class="mono ${err ? 'danger-text' : 'muted'}" title="${escTitle}">${err || '—'}</td>`,
+        `  <td class="mono ${err ? 'danger-text' : 'muted'}" title="${escTitle}">${escErr}</td>`,
         '</tr>',
       ].join('\n');
     })
